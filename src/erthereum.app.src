@@ -4,7 +4,10 @@
   {registered, []},
   {applications,
    [kernel,
-    stdlib
+    stdlib,
+    jsonrpc2,
+    gun,
+    jiffy
    ]},
   {env,[]},
   {modules, []},
