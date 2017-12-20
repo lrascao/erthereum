@@ -5,7 +5,8 @@
 -export([net_version/0]).
 %% eth namespace
 -export([eth_blockNumber/0,
-         eth_getBalance/1, eth_getBalance/2]).
+         eth_getBalance/1, eth_getBalance/2,
+         eth_accounts/0]).
 %% personal namespace
 -export([personal_newAccount/1]).
 
@@ -14,6 +15,7 @@
 -type management_api_method() :: net_version |
                                  eth_blockNumber |
                                  eth_getBalance |
+                                 eth_accounts |
                                  personal_newAccount.
 -type method_name() :: binary().
 -type method_id() :: non_neg_integer().
@@ -53,6 +55,11 @@ eth_getBalance(Address, BlockNumberOrTag0) ->
     BlockNumberOrTag = block_number_or_tag(BlockNumberOrTag0),
     maybe_int(request(management_api_data(eth_getBalance),
               [Address, BlockNumberOrTag])).
+
+%% Returns a list of addresses owned by client.
+-spec eth_accounts() -> {ok, list(address())} | {error, error()}.
+eth_accounts() ->
+    maybe_list(request(management_api_data(eth_accounts))).
 
 %% Generates a new private key and stores it in the key storese directory.
 %% The key file is encrypted with the given passphrase.
@@ -115,6 +122,11 @@ maybe_binary({error, _} = Error) -> Error;
 maybe_binary(Bin) when is_binary(Bin) ->
     {ok, Bin}.
 
+-spec maybe_list(list(binary()) | error()) -> {ok, list(binary())} | error().
+maybe_list({error, _} = Error) -> Error;
+maybe_list(L) when is_list(L) ->
+    {ok, L}.
+
 -spec management_api_data(Method :: management_api_method())
         -> {method_name(), method_id()} | method_name().
 management_api_data(net_version) ->
@@ -124,5 +136,7 @@ management_api_data(eth_blockNumber) ->
 management_api_data(eth_getBalance) ->
     {<<"eth_getBalance">>, 1};
 management_api_data(personal_newAccount) ->
-    <<"personal_newAccount">>.
+    <<"personal_newAccount">>;
+management_api_data(eth_accounts) ->
+    {<<"eth_accounts">>, 1}.
 
