@@ -79,7 +79,7 @@ request({MethodName, MethodId}, MethodArgs) when is_binary(MethodName) ->
     {ok, ConnPid} = gun:open("localhost", 8545),
     {ok, _} = gun:await_up(ConnPid),
     StreamRef = gun:post(ConnPid, "/",
-                         [{"content-type", "application/json"}],
+                         [{<<"content-type">>, <<"application/json">>}],
                          Encoded),
     case gun:await(ConnPid, StreamRef) of
         {response, fin, _, _} ->
