@@ -14,7 +14,9 @@ request(MethodName, MethodArgs) when is_binary(MethodName) ->
 request({MethodName, MethodId}, MethodArgs) when is_binary(MethodName) ->
     Req = jsonrpc2_client:create_request({MethodName, MethodArgs, MethodId}),
     Encoded = binary_to_list(jiffy:encode(Req)),
-    {ok, ConnPid} = gun:open("localhost", 8545),
+    Host = application:get_env(erthereum, host, "localhost"),
+    Port = application:get_env(erthereum, port, 8545),
+    {ok, ConnPid} = gun:open(Host, Port),
     {ok, _} = gun:await_up(ConnPid),
     StreamRef = gun:post(ConnPid, "/",
                          [{<<"content-type">>, <<"application/json">>}],
