@@ -12,6 +12,8 @@
 -export([personal_newAccount/1,
          personal_unlockAccount/2]).
 
+-export([convert/1]).
+
 %% Type definitions.
 -type error() :: failed | decoding_failed.
 -type management_api_method() :: net_version |
@@ -28,11 +30,14 @@
 -type block_tag() :: latest | earliest | pending.
 -type quantity() :: integer().
 -type data() :: binary().
+-type wei() :: {wei, integer()}.
+-type ether() :: {ether, number()}.
 
 %% Type exports
 -export_type([error/0]).
 
 %% Defines
+-define(ETHER_WEI_EXACHANGE_RATE, 1000000000000000000).
 
 %%====================================================================
 %% API functions
@@ -49,17 +54,17 @@ eth_blockNumber() ->
     maybe_int(request(eth_blockNumber)).
 
 %% Returns the balance of the account of given address.
--spec eth_getBalance(Address :: address()) -> {ok, non_neg_integer()} | {error, error()}.
+-spec eth_getBalance(Address :: address()) -> {ok, wei()} | {error, error()}.
 eth_getBalance(Address) ->
     eth_getBalance(Address, latest).
 
 %% Returns the balance of the account of given address.
 -spec eth_getBalance(Address :: address(),
                      BlockNumberOrTag :: non_neg_integer() | block_tag())
-        -> {ok, non_neg_integer()} | {error, error()}.
+        -> {ok, wei()} | {error, error()}.
 eth_getBalance(Address, BlockNumberOrTag0) ->
     BlockNumberOrTag = block_number_or_tag(BlockNumberOrTag0),
-    maybe_int(request(eth_getBalance, [Address, BlockNumberOrTag])).
+    maybe_wei(request(eth_getBalance, [Address, BlockNumberOrTag])).
 
 %% Returns a list of addresses owned by client.
 -spec eth_accounts() -> {ok, list(address())} | {error, error()}.
@@ -69,11 +74,14 @@ eth_accounts() ->
 %% Creates new message call transaction or a contract creation, if the data field contains code
 -spec eth_sendTransaction(FromAddress :: address(),
                           ToAddress :: address(),
-                          Value :: quantity()) -> {ok, TransactionHash :: data()} | {error, error()}.
-eth_sendTransaction(FromAddress, ToAddress, Value) ->
-    Params = [{[{<<"from">>, FromAddress},
-              {<<"to">>, ToAddress},
-              {<<"value">>, eth_int(Value)}]}],
+                          Value :: quantity() | wei() | ether()) -> {ok, TransactionHash :: data()} | {error, error()}.
+eth_sendTransaction(FromAddress, ToAddress, Value0) ->
+    Value = to_wei(Value0),
+    Params = [{[
+                   {<<"from">>, FromAddress},
+                   {<<"to">>, ToAddress},
+                   {<<"value">>, eth_int(Value)}
+               ]}],
     maybe_binary(request(eth_sendTransaction, Params)).
 
 
@@ -90,7 +98,11 @@ personal_newAccount(Passphrase) ->
                             )
                             -> {ok, address()} | {error, error()}.
 personal_unlockAccount(Address, Passphrase) ->
-    maybe_binary(request(personal_unlockAccount, [Address, Passphrase])).
+    maybe_boolean(request(personal_unlockAccount, [Address, Passphrase])).
+
+-spec convert(Value :: wei() | ether()) -> wei() | ether().
+convert({ether, Value}) -> {wei, erlang:trunc(Value * ?ETHER_WEI_EXACHANGE_RATE)};
+convert({wei, Value}) -> {ether, Value / ?ETHER_WEI_EXACHANGE_RATE}.
 
 %%====================================================================
 %% Internal functions
@@ -121,6 +133,12 @@ maybe_int({ok, Bin}) ->
             {ok, binary_to_integer(Bin, 16)}
     end.
 
+-spec maybe_wei({ok, binary()} | error()) -> {ok, {wei, integer()}} | error().
+maybe_wei({error, _} = Error) -> Error;
+maybe_wei(Int) ->
+    {ok, Wei} = maybe_int(Int),
+    {ok, {wei, Wei}}.
+
 -spec maybe_binary({ok, binary()} | error()) -> {ok, binary()} | error().
 maybe_binary({error, _} = Error) -> Error;
 maybe_binary({ok, Bin}) when is_binary(Bin) ->
@@ -131,9 +149,18 @@ maybe_list({error, _} = Error) -> Error;
 maybe_list({ok, L}) when is_list(L) ->
     {ok, L}.
 
+-spec maybe_boolean({ok, boolean()} | error()) -> {ok, boolean()} | error().
+maybe_boolean({error, _} = Error) -> Error;
+maybe_boolean({ok, B}) when is_boolean(B) -> {ok, B}.
+
 -spec eth_int(Integer :: integer()) -> binary().
 eth_int(Integer) when is_integer(Integer) ->
     <<"0x", (integer_to_binary(Integer, 16))/binary>>.
+
+-spec to_wei(Value :: wei() | ether() | non_neg_integer()) -> non_neg_integer().
+to_wei({ether, _} = Ether)           -> to_wei(convert(Ether));
+to_wei({wei, Wei})                   -> Wei;
+to_wei(Value) when is_integer(Value) -> Value.
 
 -spec management_api_data(Method :: management_api_method())
         -> {method_name(), method_id()} | method_name().
